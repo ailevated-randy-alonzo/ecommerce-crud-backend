@@ -32,6 +32,26 @@ app.get('/', (req, res) => {
   res.json({ status: 'Demo API is running' });
 });
 
+// TEMPORARY debug route — shows partial env var info (never the full
+// password) so we can verify Render actually received the right values.
+// Delete this route once the connection issue is fixed.
+app.get('/debug-env', (req, res) => {
+  const mask = (val) => {
+    if (!val) return 'NOT SET';
+    if (val.length <= 6) return `(length: ${val.length})`;
+    return `${val.substring(0, 3)}...${val.slice(-3)} (length: ${val.length})`;
+  };
+
+  res.json({
+    DB_HOST: process.env.DB_HOST || 'NOT SET',
+    DB_PORT: process.env.DB_PORT || 'NOT SET',
+    DB_USER: mask(process.env.DB_USER),
+    DB_PASSWORD: process.env.DB_PASSWORD ? `(length: ${process.env.DB_PASSWORD.length})` : 'NOT SET',
+    DB_NAME: process.env.DB_NAME || 'NOT SET',
+    DB_SSL: process.env.DB_SSL || 'NOT SET',
+  });
+});
+
 // POST /login
 // Compares the submitted password against the bcrypt hash stored in MySQL
 // using bcrypt.compare() — never a plaintext comparison.
