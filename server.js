@@ -76,6 +76,57 @@ app.get('/products', async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------
+// TEMPORARY DIAGNOSTIC ROUTE - REMOVE AFTER DEBUGGING
+// Visit: https://<your-render-url>/debug-login?email=admin@example.com&password=1234
+// Shows exactly which DB config is active and what the query actually
+// finds, without exposing the full password hash or DB credentials.
+// ---------------------------------------------------------------
+app.get('/debug-login', async (req, res) => {
+  const { email, password } = req.query;
+
+  const envCheck = {
+    DB_HOST_value: process.env.DB_HOST || '(NOT SET - using fallback: localhost)',
+    DB_NAME_value: process.env.DB_NAME || '(NOT SET - using fallback: ecommerce)',
+    DB_PORT_value: process.env.DB_PORT || '(NOT SET - using fallback: 3306)',
+    DB_SSL_value: process.env.DB_SSL || '(NOT SET)',
+    DB_USER_value: process.env.DB_USER || '(NOT SET - using fallback: root)',
+  };
+
+  if (!email || !password) {
+    return res.json({ envCheck, note: 'Add ?email=...&password=... to the URL to test a login attempt' });
+  }
+
+  try {
+    const [rows] = await pool.query('SELECT * FROM users WHERE email = ?', [email]);
+
+    if (rows.length === 0) {
+      return res.json({
+        envCheck,
+        userFound: false,
+        note: 'Query succeeded but no row matched this email. This backend is likely connected to a different database/cluster than the one you are viewing in TiDB SQL Editor.',
+      });
+    }
+
+    const user = rows[0];
+    const storedPasswordLooksLikeHash = typeof user.password === 'string' && user.password.startsWith('$2');
+    const passwordMatches = await bcrypt.compare(password, user.password);
+
+    res.json({
+      envCheck,
+      userFound: true,
+      storedPasswordPrefix: user.password ? user.password.substring(0, 10) + '...' : null,
+      storedPasswordLooksLikeHash,
+      bcryptCompareResult: passwordMatches,
+      note: storedPasswordLooksLikeHash
+        ? 'Stored value looks like a bcrypt hash, as expected.'
+        : 'WARNING: stored value does NOT look like a bcrypt hash - check what is actually in the users table.',
+    });
+  } catch (err) {
+    res.json({ envCheck, dbError: err.message });
+  }
+});
+
 async function start() {
   try {
     await pool.query('SELECT 1');
